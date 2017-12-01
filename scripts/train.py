@@ -102,18 +102,17 @@ def init_model(args, train_exs, dev_exs):
     args.vocab_size = len(word_dict)
 
     # Initialize model
+    logger.info('Initializing a model (gpu?: {})'.format(args.cuda))
     if args.model_type == 'cnn':
         if args.cuda:
-            model = CnnImdbSA(args, word_dict).cuda(args.gpu)
+            model = CnnImdbSA(args, word_dict).cuda()
         else:
             model = CnnImdbSA(args, word_dict)
     else:
         if args.cuda:
-            model = GruImdbSA(args, word_dict).cuda(args.gpu)
+            model = GruImdbSA(args, word_dict).cuda()
         else:
             model = GruImdbSA(args, word_dict)
-
-    # print model parameters
 
     # Load pretrained embeddings for words in dictionary
     if args.embedding_file:
@@ -210,25 +209,27 @@ def main(args):
 
     optimizer = torch.optim.Adamax(parameters, weight_decay=args.weight_decay)
 
-    # todo. using GPU?
     # todo. using multiple GPUs?
 
     # --------------------------------------------------------------------------
     # DATA ITERATORS
     logger.info('-' * 100)
     logger.info('Make data loaders')
+    kwargs = {'num_workers': 0, 'pin_memory': True} if args.cuda else \
+        {'num_workers': args.data_workers}
     train_dataset = data.ImdbDataset(train_exs, model)
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         sampler=sampler.RandomSampler(train_dataset),
-        num_workers=args.data_workers
+        **kwargs
     )
     test_dataset = data.ImdbDataset(test_exs, model)
     test_loader = DataLoader(
         test_dataset,
         batch_size=args.batch_size,
-        sampler=sampler.SequentialSampler(test_dataset)
+        sampler=sampler.SequentialSampler(test_dataset),
+        **kwargs
     )
 
     # --------------------------------------------------------------------------
@@ -252,9 +253,8 @@ def main(args):
         losses = [[], 0]
         losses_total = 0
         for idx, ex in enumerate(train_loader):
-            # todo, transfer to GPU (args.use_cuda)
             if args.cuda:
-                inputs = [e if e is None else Variable(e.cuda(async=True))
+                inputs = [e if e is None else Variable(e.cuda())
                           for e in ex[:2]]
             else:
                 inputs = [e if e is None else Variable(e) for e in ex[:2]]
@@ -317,6 +317,14 @@ def main(args):
 
 
 if __name__ == '__main__':
+    # Set logging - both to file and console
+    logger.setLevel(logging.INFO)
+    fmt = logging.Formatter('%(asctime)s: [ %(message)s ]',
+                            '%m/%d/%Y %I:%M:%S %p')
+    console = logging.StreamHandler()
+    console.setFormatter(fmt)
+    logger.addHandler(console)
+
     parser = argparse.ArgumentParser(
         'IMDB sentimental analysis',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
@@ -324,17 +332,6 @@ if __name__ == '__main__':
     add_train_args(parser)
     add_model_args(parser)
     args = parser.parse_args()
-
-    # Set logging - both to file and console
-    logger.setLevel(logging.INFO)
-    fmt = logging.Formatter('%(asctime)s: [ %(message)s ]',
-                            '%m/%d/%Y %I:%M:%S %p')
-    file = logging.FileHandler("run{}.log".format(args.run_name))
-    file.setFormatter(fmt)
-    logger.addHandler(file)
-    console = logging.StreamHandler()
-    console.setFormatter(fmt)
-    logger.addHandler(console)
 
     # Set defaults
     if args.data_dir is None:
@@ -357,10 +354,19 @@ if __name__ == '__main__':
     args.class_num = 2  # pos or neg
     if args.run_name is None:
         args.run_name = str(int(time.time()))
+    logger.info('RUN: {}'.format(args.run_name))
+
+    # add file log handle
+    file = logging.FileHandler("run{}.log".format(args.run_name))
+    file.setFormatter(fmt)
+    logger.addHandler(file)
 
     # Set cuda
     args.cuda = not args.no_cuda and torch.cuda.is_available()
     if args.cuda:
+        # somehow, TITAN X is not working fine with my code. I had to
+        # specifically set CUDA_VISIBLE_DEVICES to 1,2 and give --gpu 0 in
+        # order to use GTX cards. don't know why.
         torch.cuda.set_device(args.gpu)
         logger.info('CUDA enabled (GPU %d)' % args.gpu)
     else:

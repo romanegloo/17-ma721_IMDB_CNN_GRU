@@ -34,7 +34,10 @@ class CnnImdbSA(nn.Module):
         self.decoder = nn.Linear(len(Ks) * Co, C)
 
     def forward(self, x, x_len):
+        if self.args.cuda:
+            x = x.cuda()
         x = self.encoder(x)                        # (N, W, E)
+
         x = x.unsqueeze(1)                           # (N, Ci, W, E)
         x = [F.relu(conv(x)).squeeze(3) for conv in self.convs1]
                                                      # (N, Co, W-Ks_i) * len(Ks)
@@ -43,6 +46,7 @@ class CnnImdbSA(nn.Module):
         x = torch.cat(x, 1)                          # (N, Co * len(Ks))
         x = self.dropout(x)
         logit = self.decoder(x)
+        logit = logit.cpu()
         return logit
 
     def predict(self, x):
@@ -113,9 +117,6 @@ class GruImdbSA(nn.Module):
         self.decoder = nn.Linear(H, C)
 
     def forward(self, x, x_len, hidden):
-        # print('x:', x.size())
-        # print('hidden:', hidden.size())
-
         # compute sorted sequence lengths
         sorted_len, idx_sort = torch.sort(x_len, dim=0, descending=True)
         _, idx_unsort = torch.sort(idx_sort, dim=0)
@@ -127,25 +128,20 @@ class GruImdbSA(nn.Module):
         x = x.index_select(0, idx_sort)
 
         x = self.encoder(x)           # (N, W, E)
-        # print('emb:', x.size())
         x = x.permute(1, 0, 2)
-        # print('embr2:', x.size())
 
         # pack it up
         rnn_input = nn.utils.rnn.pack_padded_sequence(x, lengths)
 
         x, hn = self.gru(rnn_input, hidden)      # x (1, W, H)
-        # print('gru_out:', x.size())
-        # print('gru_hn:', hn.size())
 
         x = hn.squeeze()                 # (V, H)
-        # print('x_sq:', x.size())
 
         logit = self.decoder(x)
-        # print('logit:', logit)
 
         # unsort and return
         logit = logit.index_select(0, idx_unsort)
+        logit = logit.cpu()
         return logit
 
     # def forward_unppaded(self, x, x_len, hidden):
@@ -159,7 +155,7 @@ class GruImdbSA(nn.Module):
     def predict(self, x):
         self.eval()
         if self.args.cuda:
-            inputs = [e if e is None else Variable(e.cuda(async=True))
+            inputs = [e if e is None else Variable(e.cuda())
                       for e in x[:2]]
         else:
             inputs = [e if e is None else Variable(e) for e in x[:2]]
@@ -168,7 +164,10 @@ class GruImdbSA(nn.Module):
         return indices
 
     def initHidden(self, N):
-        return Variable(torch.randn(1, N, self.hidden_dim))
+        if self.args.cuda:
+            return Variable(torch.randn(1, N, self.hidden_dim)).cuda()
+        else:
+            return Variable(torch.randn(1, N, self.hidden_dim))
 
     def load_embeddings(self, words, embedding_file):
         """Load pretrained word embeddings for a given list of words"""

@@ -22,11 +22,11 @@ words that will be fed into the network will range between 700~900, since
 numeric literals, special characters, OOV (out of vocabulary) terms will not
 be considered.  
 
-#### vocabulary
-The number of unique words identified by wikipedia word embeddings is 84,546. 
+#### vocabulary in word representations
+The number of unique words identified by [FastTest Wikipedia](http://bit.ly/2Bs7zqh) word embeddings is 84,546. I've also tried with a different word representations, [GloVe](https://nlp.stanford.edu/projects/glove/), and there is no significant difference in results.
 
-#### examples
-*Example of a Negative Review*  
+#### example review documents
+*Negative Review*  
   
     This movie is terrible. Carlitos Way(1993) is a great film. Goodgfellas it 
     isn't but its one of the better crime films done. This movie should be 
@@ -40,7 +40,7 @@ The number of unique words identified by wikipedia word embeddings is 84,546.
     Carlitos way to get th bad taste out of my mouth. After watching this I wish 
     Pachanga came and whacked me out of my misery.
     
-*Example of a Positive Review*  
+*Positive Review*  
 
     This is a bizzare look at Al's "life", back when he still a hyper 
     20-something. The (real) home videos of Al as a kid are great, and the 
@@ -52,42 +52,60 @@ The number of unique words identified by wikipedia word embeddings is 84,546.
 ## Model Architecture
 
 ### Convolutional Neural Network (CNN)
+The CNN model resembles the implementation of Kim's paper, [Convolutional Neural Networks for Sentence Classification](https://arxiv.org/abs/1408.5882). Arguably, this is the most popular model for text classification using CNN. It has three different kernel sizes (3, 4, 5), with the depth of 128. That is, it applies convolutions on 3, 4, or 5 word representations. Max pooling follows right after that. 
 
-* **Parameters of CNN**
+![CNN model for Text Classification](http://bit.ly/2BqB7Vg)
 
-	```
+Parameters are listed as below:
+
+
+**Parameters of CNN**
+
+```
 	CnnImdbSA (
 		(encoder): Embedding(7643, 300, padding_idx=0), weights=((7643, 300),), parameters=2292900
 		(convs1): ModuleList (
-    		(0): Conv2d(1, 100, kernel_size=(3, 300), stride=(1, 1))
-			(1): Conv2d(1, 100, kernel_size=(4, 300), stride=(1, 1))
-			(2): Conv2d(1, 100, kernel_size=(5, 300), stride=(1, 1))
-		), weights=((100, 1, 3, 300), (100,), (100, 1, 4, 300), (100,), (100, 1, 5, 300), (100,)), parameters=360300
+    		(0): Conv2d(1, 128, kernel_size=(3, 300), stride=(1, 1))
+			(1): Conv2d(1, 128, kernel_size=(4, 300), stride=(1, 1))
+			(2): Conv2d(1, 128, kernel_size=(5, 300), stride=(1, 1))
+		), weights=((128, 1, 3, 300), (128,), (128, 1, 4, 300), (128,), (128, 1, 5, 300), (100,)), parameters=461184
 		(dropout): Dropout (p = 0.5), weights=(), parameters=0
 		(decoder): Linear (300 -> 2), weights=((2, 300), (2,)), parameters=602
 	)
-	```
-	Total number of parameters (excluding the embedding layer): 360,902
+```
+Total number of parameters (excluding the embedding layer): 461,786
+
 ### Recurrent Neural Network (RNN)
+For the recurrent neural network, I've experimeted with Gate Recurrent Units (GRU) model. It has four learnable weight attributes:
+![Gate Recurrent Units](http://bit.ly/2Brzerj)
 
+- weight\_input\_hidden (3 * hidden\_size x input\_size)
+- weight\_hidden\_hidden (3 * hidden\_size x hidden\_size)
+- bias\_input\_hidden (3 * hidden\_size)
+- bias\_hidden\_hidden (3 * hidden\_size)
 
-* **Parameters of RNN (GRU)**  
+Parameters are listed as below:
 
-  ```
+**Parameters of RNN (GRU)**  
+
+```
   GruImdbSA (
       (encoder: Embedding(84546, 300), weights=((84546, 300),), parameters=25363800
       (gru): GRU(300, 128), weights=((384, 300), (384, 128), (384,), (384,)), parameters=165120
       (decoder): Linear (128 -> 2), weights=((2, 128), (2,)), parameters=258
   )
-  ```
+```
 
-  Total number of parameters (excluding the embedding layer): 165,378
+Total number of parameters (excluding the embedding layer): 165,378
 
 ## Results
 
-| network | capacity (epoch x parameters) | batch\_size | optimizer | regularization | accuracy (vl/ts) | ratio (acc. to computation) | best accuracy (vl/ts) |
+| network | capacity (#parameters) | batch\_size | optimizer | regularization | accuracy (vl/ts) | best ratio (acc. to computation) | best accuracy (vl/ts) |
 |:--------:|:---------------------------------:|:----------:|:--------:|:--------------:|:--------:|:--------------------:|:-------------:|
-| CNN | 3 x 165,378 | 64 | SGD (lr=2e-4) | L2 (decay=0.1) | 88.00 / 91 .60 | 26.39 | 98.92 / 99.20 (48 epochs) |
+| CNN | 461,786 | 10 | Adamax (lr=2e-3) | L2 (decay=0) | 0.867 / 0.889 | 0.224 (1 epoch) | 1.000 / 0.999 (48 epochs) |
+| GRU | 165,378 | 10 | Adamax (lr=2e-3) | L2 (decay=0) | 0.867 / 0.889 | 0.224 (1 epoch) | 1.000 / 0.999 (48 epochs) |
+
+
 
 ## Conclusion
 

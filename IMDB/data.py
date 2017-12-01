@@ -70,6 +70,7 @@ class Dictionary(object):
 # PyTorch Dataset class for IMDB data
 # ------------------------------------------------------------------------------
 
+
 class ImdbDataset(Dataset):
     def __init__(self, examples, model):
         self.ex = examples

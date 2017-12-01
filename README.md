@@ -54,7 +54,8 @@ The number of unique words identified by [FastTest Wikipedia](http://bit.ly/2Bs7
 ### Convolutional Neural Network (CNN)
 The CNN model resembles the implementation of Kim's paper, [Convolutional Neural Networks for Sentence Classification](https://arxiv.org/abs/1408.5882). Arguably, this is the most popular model for text classification using CNN. It has three different kernel sizes (3, 4, 5), with the depth of 128. That is, it applies convolutions on 3, 4, or 5 word representations. Max pooling follows right after that. 
 
-![CNN model for Text Classification](http://bit.ly/2BqB7Vg)
+![CNN model for Text Classification](http://bit.ly/2BqB7Vg)  
+*Figure. CNN model for text classification (image from http://www.wildml.com/)*
 
 Parameters are listed as below:
 
@@ -76,8 +77,11 @@ Parameters are listed as below:
 Total number of parameters (excluding the embedding layer): 461,786
 
 ### Recurrent Neural Network (RNN)
-For the recurrent neural network, I've experimeted with Gate Recurrent Units (GRU) model. It has four learnable weight attributes:
-![Gate Recurrent Units](http://bit.ly/2Brzerj)
+For the recurrent neural network, I've experimeted with Gate Recurrent Units (GRU) model. 
+![Gate Recurrent Units](http://bit.ly/2Brzerj)  
+*Figure. Gate Recurrent Units (image from http://colah.github.io/posts/2015-08-Understanding-LSTMs/)*
+
+It has four learnable weight attributes: 
 
 - weight\_input\_hidden (3 * hidden\_size x input\_size)
 - weight\_hidden\_hidden (3 * hidden\_size x hidden\_size)
@@ -100,12 +104,13 @@ Total number of parameters (excluding the embedding layer): 165,378
 
 ## Results
 
-| network | capacity (#parameters) | batch\_size | optimizer | regularization | accuracy (vl/ts) | best ratio (acc. to computation) | best accuracy (vl/ts) |
+| <sub>network | <sub>capacity (#parameters) | <sub>batch\_size | <sub>optimizer | <sub>regularization | <sub>accuracy (vl/ts) | <sub>best ratio (acc. to computation) | <sub>best accuracy (vl/ts) |
 |:--------:|:---------------------------------:|:----------:|:--------:|:--------------:|:--------:|:--------------------:|:-------------:|
-| CNN | 461,786 | 10 | Adamax (lr=2e-3) | L2 (decay=0) | 0.867 / 0.889 | 0.224 (1 epoch) | 1.000 / 0.999 (48 epochs) |
-| GRU | 165,378 | 10 | Adamax (lr=2e-3) | L2 (decay=0) | 0.867 / 0.889 | 0.224 (1 epoch) | 1.000 / 0.999 (48 epochs) |
+| <sub>CNN | <sub>461,786 | <sub>10 | <sub>Adamax (lr=2e-3) | <sub>L2 (decay=0) | <sub>0.867 / 0.889 | <sub>0.224 (1 epoch) | <sub>1.000 / 0.999 (48 epochs) |
+| <sub>GRU | <sub>165,378 | <sub>10 | <sub>Adamax (lr=2e-3) | <sub>L2 (decay=0) | <sub>0.867 / 0.889 | <sub>0.224 (1 epoch) | <sub>1.000 / 0.999 (48 epochs) |
 
-![Loss/Accuracy Plot of CNN model](17-ma721_IMDB_CNN_GRU/log/plot-cnn-1330.png "Loss/Accuracy Plots of CNN model")
+![Loss/Accuracy Plot of CNN model](https://github.com/romanegloo/17-ma721_IMDB_CNN_GRU/blob/master/log/plot-cnn-1330.png?raw=true)  
+*Figure. Loss/Accuracy Plots of CNN model*
 
 ## Conclusion
 

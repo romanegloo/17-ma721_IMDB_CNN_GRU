@@ -22,15 +22,25 @@ def add_train_args(parser):
     # Runtime environment
     runtime = parser.add_argument_group('Environment')
 
+    runtime.add_argument('--run-name', type=str,
+                         help='identifiable name for each run')
     runtime.add_argument('--num-epochs', type=int, default=5,
                          help='Train data iterations')
-    runtime.add_argument('--random-seed', type=int, default=1013,
+    runtime.add_argument('--random-seed', type=int,
                          help=('Random seed for all numpy/torch/cuda '
                                'operations (for reproducibility)'))
     runtime.add_argument('--batch-size', type=int, default=10,
                          help='batch size for training')
     runtime.add_argument('--data-workers', type=int, default=4,
                          help='Number of subprocesses for data loading')
+    runtime.add_argument('--print-parameters', action='store_true',
+                         help='Print out model parameters')
+    runtime.add_argument('--save-plots', action='store_true',
+                         help='Save plot files of losses/accuracies/etc.')
+    runtime.add_argument('--no-cuda', action='store_true',
+                         help='Use CPU only')
+    runtime.add_argument('--gpu', type=int, default=-1,
+                         help="Specify GPU device id to use")
 
     # files
     files = parser.add_argument_group('Files')
@@ -61,7 +71,7 @@ def add_model_args(parser):
                        help='GRU hidden dimension')
     model.add_argument('--doc-maxlen', type=int, default=500,
                        help='Max length of document in words')
-    model.add_argument('--kernel-num', type=int, default=100,
+    model.add_argument('--kernel-num', type=int, default=128,
                        help='number of each kind of kernel')
     model.add_argument('--kernel-sizes', type=str, default='3,4,5',
                        help='Comma-separated kernel sizes used for CNN')
@@ -93,9 +103,17 @@ def init_model(args, train_exs, dev_exs):
 
     # Initialize model
     if args.model_type == 'cnn':
-        model = CnnImdbSA(args, word_dict)
+        if args.cuda:
+            model = CnnImdbSA(args, word_dict).cuda(args.gpu)
+        else:
+            model = CnnImdbSA(args, word_dict)
     else:
-        model = GruImdbSA(args, word_dict)
+        if args.cuda:
+            model = GruImdbSA(args, word_dict).cuda(args.gpu)
+        else:
+            model = GruImdbSA(args, word_dict)
+
+    # print model parameters
 
     # Load pretrained embeddings for words in dictionary
     if args.embedding_file:
@@ -120,12 +138,43 @@ def validate(data_loader, model, stats, mode):
         accuracy = ex[2].eq(predict.data).sum() / batch_size
         examples += batch_size
         accuracies.append(accuracy)
-        if examples >= 5e3:
+        if examples >= 1e3:
             break
-    logger.info("{} validation: Epoch = {} | examples = {} | accuracy = {}"
-                ''.format(mode, stats['epoch'], examples,
-                          sum(accuracies)/len(accuracies)))
+    logger.info("{} validation: examples = {} | accuracy = {}"
+                ''.format(mode, examples, sum(accuracies)/len(accuracies)))
     return sum(accuracies) / len(accuracies)
+
+# ------------------------------------------------------------------------------
+# Save Plots
+# ------------------------------------------------------------------------------
+
+
+def save_plots(stats):
+    import matplotlib.pyplot as plt
+
+    x = list(range(args.num_epochs))
+    # losses
+    plt.figure(figsize=(7, 4))
+    plt.subplot(121)
+    plt.plot(x, stats['losses'], 'r', label='train loss')
+    plt.xlabel('epoch')
+    plt.ylabel('loss')
+    plt.title('Train Losses')
+    plt.legend()
+
+
+    # accuracy
+    plt.subplot(122)
+    plt.plot(x, stats['acc_train'], 'g', label='train')
+    plt.plot(x, stats['acc_test'], 'r', label='test')
+    plt.xlabel('epoch')
+    plt.ylabel('accuracy')
+    plt.title('Test/Train Accuracies')
+    plt.legend()
+
+    plt.tight_layout()
+    plt.savefig("plot-{}.png".format(args.run_name))
+    plt.show()
 
 
 # ------------------------------------------------------------------------------
@@ -151,9 +200,13 @@ def main(args):
         model = init_model(args, train_exs, test_exs)
 
     # fix embeddings
-    for p in model.embedding.parameters():
+    for p in model.encoder.parameters():
         p.requires_grad = False
     parameters = [p for p in model.parameters() if p.requires_grad]
+
+    model_summary, total_params, total_wo_emb = utils.torch_summarize(model)
+    if args.print_parameters:
+         print(model_summary)
 
     optimizer = torch.optim.Adamax(parameters, weight_decay=args.weight_decay)
 
@@ -182,16 +235,29 @@ def main(args):
     # TRAIN/VALID LOOP
     logger.info('-' * 100)
     logger.info('Starting training...')
-    stats = {'epoch': 0, 'best_valid': 0}
+    stats = {
+        'best_valid': 0,
+        'best_valid_at': 0,
+        'best_ratio': 0,
+        'best_ratio_at': 0,
+        'acc_train': [],
+        'acc_test': [],
+        'ratio': [],
+        'losses': []
+    }
     for epoch in range(start_epoch, args.num_epochs):
-        stats['epoch'] = epoch
 
         # train update sequence
         model.train()
         losses = [[], 0]
+        losses_total = 0
         for idx, ex in enumerate(train_loader):
             # todo, transfer to GPU (args.use_cuda)
-            inputs = [e if e is None else Variable(e) for e in ex[:2]]
+            if args.cuda:
+                inputs = [e if e is None else Variable(e.cuda(async=True))
+                          for e in ex[:2]]
+            else:
+                inputs = [e if e is None else Variable(e) for e in ex[:2]]
             if args.model_type == 'cnn':
                 logit = model(*inputs)
             else:
@@ -212,23 +278,42 @@ def main(args):
 
             losses[0].append(loss.data[0])
             losses[1] += 1
-            if idx % 5 == 0:
+            losses_total += loss.data[0]
+
+            if idx % 10 == 0:
                 logger.info('train: Epoch = {} | iter = {}/{} | loss = {:.2E}'
                             ''.format(epoch, idx, len(train_loader),
                                       sum(losses[0])/losses[1]))
                 losses = [[], 0]
-        logger.info('train: Epoch {} done.'.format(stats['epoch']))
+        stats['losses'].append(round(losses_total / len(train_loader), 4))
+        logger.info('train: Epoch {} done.'.format(epoch))
 
         # Validate
         valid_tr = validate(train_loader, model, stats, mode='train')
+        stats['acc_train'].append(round(valid_tr, 4))
         valid_ts = validate(test_loader, model, stats, mode='test')
+        stats['acc_test'].append(round(valid_ts, 4))
+        ratio = valid_ts / (total_wo_emb * (epoch + 1))**.1
+        stats['ratio'].append(ratio)
         if valid_ts > stats['best_valid']:
             logger.info('BEST VALID: accuracy={:.2f} (epoch {})'
-                        ''.format(valid_ts, stats['epoch']))
-            # todo. save the model
+                        ''.format(valid_ts, epoch))
+            # todo. save the best model
             stats['best_valid'] = valid_ts
+            stats['best_valid_at'] = epoch
+        if ratio > stats['best_ratio']:
+            logger.info('BEST RATIO: ratio={:.2f} (epoch {})'
+                        ''.format(ratio, epoch))
+            stats['best_ratio'] = ratio
+            stats['best_ratio_at'] = epoch
 
-        # Save best valid
+        print(stats)
+
+    logger.info(stats)
+
+    # save plot files
+    if args.save_plots:
+        save_plots(stats)
 
 
 if __name__ == '__main__':
@@ -239,6 +324,17 @@ if __name__ == '__main__':
     add_train_args(parser)
     add_model_args(parser)
     args = parser.parse_args()
+
+    # Set logging - both to file and console
+    logger.setLevel(logging.INFO)
+    fmt = logging.Formatter('%(asctime)s: [ %(message)s ]',
+                            '%m/%d/%Y %I:%M:%S %p')
+    file = logging.FileHandler("run{}.log".format(args.run_name))
+    file.setFormatter(fmt)
+    logger.addHandler(file)
+    console = logging.StreamHandler()
+    console.setFormatter(fmt)
+    logger.addHandler(console)
 
     # Set defaults
     if args.data_dir is None:
@@ -259,27 +355,23 @@ if __name__ == '__main__':
         )
     args.kernel_sizes = [int(k) for k in args.kernel_sizes.split(',')]
     args.class_num = 2  # pos or neg
-
+    if args.run_name is None:
+        args.run_name = str(int(time.time()))
 
     # Set cuda
-    # args.cuda = not args.no_cuda and torch.cuda.is_available()
+    args.cuda = not args.no_cuda and torch.cuda.is_available()
+    if args.cuda:
+        torch.cuda.set_device(args.gpu)
+        logger.info('CUDA enabled (GPU %d)' % args.gpu)
+    else:
+        logger.info('Running on CPU only.')
 
     # Set random state
-    np.random.seed(args.random_seed)
-    torch.manual_seed(args.random_seed)
-    # if args.cuda:
-    #     torch.cuda.manual_seed(args.random_seed)
-
-    # Set logging - both to file and console
-    logger.setLevel(logging.INFO)
-    fmt = logging.Formatter('%(asctime)s: [ %(message)s ]',
-                            '%m/%d/%Y %I:%M:%S %p')
-    file = logging.FileHandler("run{}.log".format(int(time.time())))
-    file.setFormatter(fmt)
-    logger.addHandler(file)
-    console = logging.StreamHandler()
-    console.setFormatter(fmt)
-    logger.addHandler(console)
+    if args.random_seed is not None:
+        np.random.seed(args.random_seed)
+        torch.manual_seed(args.random_seed)
+        if args.cuda:
+            torch.cuda.manual_seed(args.random_seed)
 
     # Run!
     main(args)

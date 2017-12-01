@@ -27,14 +27,14 @@ class CnnImdbSA(nn.Module):
         Ks = args.kernel_sizes
         logger.info("vocab_size: {}, embedding_dim: {}".format(V, E))
 
-        self.embedding = nn.Embedding(V, E, padding_idx=0)
+        self.encoder = nn.Embedding(V, E, padding_idx=0)
         self.convs1 = nn.ModuleList(
             [nn.Conv2d(Ci, Co, (K, E)) for K in Ks])
         self.dropout = nn.Dropout(args.dropout)
-        self.fc1 = nn.Linear(len(Ks) * Co, C)
+        self.decoder = nn.Linear(len(Ks) * Co, C)
 
     def forward(self, x, x_len):
-        x = self.embedding(x)                        # (N, W, E)
+        x = self.encoder(x)                        # (N, W, E)
         x = x.unsqueeze(1)                           # (N, Ci, W, E)
         x = [F.relu(conv(x)).squeeze(3) for conv in self.convs1]
                                                      # (N, Co, W-Ks_i) * len(Ks)
@@ -42,7 +42,7 @@ class CnnImdbSA(nn.Module):
                                                      # (N, Co) * len(Ks)
         x = torch.cat(x, 1)                          # (N, Co * len(Ks))
         x = self.dropout(x)
-        logit = self.fc1(x)
+        logit = self.decoder(x)
         return logit
 
     def predict(self, x):
@@ -56,7 +56,7 @@ class CnnImdbSA(nn.Module):
         words = {w for w in words if w in self.word_dict}
         logger.info('Loading pre-trained embeddings for {} words from {}'
                     ''.format(len(words), embedding_file))
-        embedding = self.embedding.weight.data
+        embedding = self.encoder.weight.data
 
         # When normalized, some words are duplicated. (Average the embeddings).
         vec_counts = {}
@@ -108,9 +108,9 @@ class GruImdbSA(nn.Module):
         V = args.vocab_size
         W = args.doc_maxlen
 
-        self.embedding = nn.Embedding(V, E)
+        self.encoder = nn.Embedding(V, E)
         self.gru = nn.GRU(input_size=E, hidden_size=H)
-        self.fc1 = nn.Linear(H, C)
+        self.decoder = nn.Linear(H, C)
 
     def forward(self, x, x_len, hidden):
         # print('x:', x.size())
@@ -126,7 +126,7 @@ class GruImdbSA(nn.Module):
         # sort x
         x = x.index_select(0, idx_sort)
 
-        x = self.embedding(x)           # (N, W, E)
+        x = self.encoder(x)           # (N, W, E)
         # print('emb:', x.size())
         x = x.permute(1, 0, 2)
         # print('embr2:', x.size())
@@ -141,7 +141,7 @@ class GruImdbSA(nn.Module):
         x = hn.squeeze()                 # (V, H)
         # print('x_sq:', x.size())
 
-        logit = self.fc1(x)
+        logit = self.decoder(x)
         # print('logit:', logit)
 
         # unsort and return
@@ -158,7 +158,11 @@ class GruImdbSA(nn.Module):
 
     def predict(self, x):
         self.eval()
-        inputs = [e if e is None else Variable(e) for e in x[:2]]
+        if self.args.cuda:
+            inputs = [e if e is None else Variable(e.cuda(async=True))
+                      for e in x[:2]]
+        else:
+            inputs = [e if e is None else Variable(e) for e in x[:2]]
         logits = self.forward(*inputs, self.initHidden(x[0].size()[0]))
         values, indices = logits.max(1)
         return indices
@@ -171,7 +175,7 @@ class GruImdbSA(nn.Module):
         words = {w for w in words if w in self.word_dict}
         logger.info('Loading pre-trained embeddings for {} words from {}'
                     ''.format(len(words), embedding_file))
-        embedding = self.embedding.weight.data
+        embedding = self.encoder.weight.data
 
         # When normalized, some words are duplicated. (Average the embeddings).
         vec_counts = {}

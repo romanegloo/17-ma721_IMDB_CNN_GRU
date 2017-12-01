@@ -105,7 +105,7 @@ Total number of parameters (excluding the embedding layer): 165,378
 | CNN | 461,786 | 10 | Adamax (lr=2e-3) | L2 (decay=0) | 0.867 / 0.889 | 0.224 (1 epoch) | 1.000 / 0.999 (48 epochs) |
 | GRU | 165,378 | 10 | Adamax (lr=2e-3) | L2 (decay=0) | 0.867 / 0.889 | 0.224 (1 epoch) | 1.000 / 0.999 (48 epochs) |
 
-
+![Loss/Accuracy Plot of CNN model](17-ma721_IMDB_CNN_GRU/log/plot-cnn-1330.png "Loss/Accuracy Plots of CNN model")
 
 ## Conclusion
 

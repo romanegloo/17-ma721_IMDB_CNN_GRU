@@ -77,7 +77,8 @@ class ImdbDataset(Dataset):
         self.w_dict = model.word_dict
         self.doc_maxlen = model.args.doc_maxlen
         self.lengths = [0] * len(examples)
-        # self.f_dict = model.feature_dict
+        self.use_ft = model.args.use_feature_tags
+        self.ft_dict = model.feature_dict if self.use_ft else None
 
         self._get_doc_lengths()
 
@@ -91,17 +92,32 @@ class ImdbDataset(Dataset):
             self.lengths[idx] = length
 
     def __getitem__(self, idx):
-        # padding the context of given example
         document = self.ex[idx]['context'][:]
-        # length = len(context) if len(context) <= self.doc_maxlen else \
-        #     self.doc_maxlen
+        ft_ner = self.ex[idx]['ner'][:]
+        ft_pos = self.ex[idx]['pos'][:]
+
+        # padding the context of given example
         if self.lengths[idx] >= self.doc_maxlen:
             document = document[:self.doc_maxlen]
+            ft_ner = ft_ner[:self.doc_maxlen]
+            ft_pos = ft_pos[:self.doc_maxlen]
         else:
             document.extend(['<NULL>'] * (self.doc_maxlen - self.lengths[idx]))
+            ft_ner.extend(['<NULL>'] * (self.doc_maxlen - self.lengths[idx]))
+            ft_pos.extend(['<NULL>'] * (self.doc_maxlen - self.lengths[idx]))
         # index words
         document = \
             torch.LongTensor([self.w_dict[w] for w in document])
 
-        return document, self.lengths[idx], self.ex[idx]['label']
-
+        # features (ner, pos)
+        if self.use_ft:
+            ft_ner = torch.LongTensor(
+                [self.ft_dict['ner='+w] if 'ner='+w in self.ft_dict else -1
+                 for w in ft_ner])
+            ft_pos = torch.LongTensor(
+                [self.ft_dict['pos='+w] if 'pos='+w in self.ft_dict else -1
+                 for w in ft_pos])
+            return document, self.lengths[idx], ft_ner, ft_pos, \
+                   self.ex[idx]['label']
+        else:
+            return document, self.lengths[idx], self.ex[idx]['label']

@@ -100,5 +100,7 @@ def torch_summarize(model, show_weights=True, show_parameters=True):
             tmpstr += ', parameters={}'.format(params)
         tmpstr += '\n'
 
-    tmpstr = tmpstr + ')'
-    return tmpstr, total_params, total_params_wo_embedding
+    tmpstr += ')\ntotal_params: %d, total_params_wo_embedding: %d' %\
+              (total_params, total_params_wo_embedding)
+    model.num_parameters = total_params_wo_embedding
+    return tmpstr

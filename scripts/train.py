@@ -4,6 +4,7 @@
 import argparse
 import logging
 import os
+import sys
 import time
 from pathlib import PosixPath
 
@@ -13,7 +14,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 from torch.utils.data import DataLoader, sampler
 
-from IMDB import utils, CnnImdbSA, GruImdbSA, data
+from IMDB import utils, CnnImdbSA, CnnFeatImdbSA, GruImdbSA, data
 
 logger = logging.getLogger()
 
@@ -65,6 +66,8 @@ def add_model_args(parser):
     model.add_argument('--model-type', type=str, default='cnn',
                        choices=['cnn', 'rnn'],
                        help='Model architecture type')
+    model.add_argument('--use-feature-tags', action='store_true',
+                       help='add nlp annotations to the inputs')
     model.add_argument('--embedding-dim', type=int, default=300,
                        help='Embedding size if embedding_file is not given')
     model.add_argument('--hidden-dim', type=int, default=128,
@@ -105,9 +108,15 @@ def init_model(args, train_exs, dev_exs):
     logger.info('Initializing a model (gpu?: {})'.format(args.cuda))
     if args.model_type == 'cnn':
         if args.cuda:
-            model = CnnImdbSA(args, word_dict).cuda()
+            if args.use_feature_tags:
+                model = CnnFeatImdbSA(args, word_dict).cuda()
+            else:
+                model = CnnImdbSA(args, word_dict).cuda()
         else:
-            model = CnnImdbSA(args, word_dict)
+            if args.use_feature_tags:
+                model = CnnFeatImdbSA(args, word_dict, feature_dict)
+            else:
+                model = CnnImdbSA(args, word_dict)
     else:
         if args.cuda:
             model = GruImdbSA(args, word_dict).cuda()
@@ -120,6 +129,64 @@ def init_model(args, train_exs, dev_exs):
 
     return model
 
+
+# ------------------------------------------------------------------------------
+# Train
+# ------------------------------------------------------------------------------
+
+def train(model, train_loader, test_loader, optimizer, global_stats):
+    for epoch in range(args.num_epochs):
+        model.train()
+        losses = [[], 0]
+        losses_total = 0
+        for idx, ex in enumerate(train_loader):
+            if args.cuda:
+                inputs = [e if e is None else Variable(e.cuda())
+                          for e in ex[:-1]]
+            else:
+                inputs = [e if e is None else Variable(e) for e in ex[:-1]]
+            if args.model_type == 'cnn':
+                logit = model(*inputs)
+            else:
+                logit = model(*inputs, model.initHidden(inputs[0].size()[0]))
+            loss = F.cross_entropy(logit, Variable(ex[-1]))
+
+            # Clear gradients and run backward
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            losses[0].append(loss.data[0])
+            losses[1] += 1
+            losses_total += loss.data[0]
+
+            if idx % 10 == 0:
+                logger.info('train: Epoch = {} | iter = {}/{} | loss = {:.2E}'
+                            ''.format(epoch, idx, len(train_loader),
+                                      sum(losses[0])/losses[1]))
+                losses = [[], 0]
+        global_stats['losses'].append(
+            round(losses_total / len(train_loader), 4))
+        logger.info('train: Epoch {} done.'.format(epoch))
+
+        # Validate
+        valid_tr = validate(train_loader, model, global_stats, mode='train')
+        global_stats['acc_train'].append(round(valid_tr, 4))
+        valid_ts = validate(test_loader, model, global_stats, mode='test')
+        global_stats['acc_test'].append(round(valid_ts, 4))
+        ratio = valid_ts / (model.num_parameters * (epoch + 1))**.1
+        global_stats['ratio'].append(ratio)
+        if valid_ts > global_stats['best_valid']:
+            logger.info('BEST VALID: accuracy={:.2f} (epoch {})'
+                        ''.format(valid_ts, epoch))
+            # todo. save the best model
+            global_stats['best_valid'] = valid_ts
+            global_stats['best_valid_at'] = epoch
+        if ratio > global_stats['best_ratio']:
+            logger.info('BEST RATIO: ratio={:.2f} (epoch {})'
+                        ''.format(ratio, epoch))
+            global_stats['best_ratio'] = ratio
+            global_stats['best_ratio_at'] = epoch
 
 # ------------------------------------------------------------------------------
 # Validate
@@ -155,25 +222,25 @@ def save_plots(stats):
     # losses
     plt.figure(figsize=(7, 4))
     plt.subplot(121)
-    plt.plot(x, stats['losses'], 'r', label='train loss')
-    plt.xlabel('epoch')
-    plt.ylabel('loss')
-    plt.title('Train Losses')
-    plt.legend()
+plt.plot(x, stats['losses'], 'r', label='train loss')
+plt.xlabel('epoch')
+plt.ylabel('loss')
+plt.title('Train Losses')
+plt.legend()
 
 
-    # accuracy
-    plt.subplot(122)
-    plt.plot(x, stats['acc_train'], 'g', label='train')
-    plt.plot(x, stats['acc_test'], 'r', label='test')
-    plt.xlabel('epoch')
-    plt.ylabel('accuracy')
-    plt.title('Test/Train Accuracies')
-    plt.legend()
+# accuracy
+plt.subplot(122)
+plt.plot(x, stats['acc_train'], 'g', label='train')
+plt.plot(x, stats['acc_test'], 'r', label='test')
+plt.xlabel('epoch')
+plt.ylabel('accuracy')
+plt.title('Test/Train Accuracies')
+plt.legend()
 
-    plt.tight_layout()
-    plt.savefig("plot-{}.png".format(args.run_name))
-    plt.show()
+plt.tight_layout()
+plt.savefig("plot-{}.png".format(args.run_name))
+plt.show()
 
 
 # ------------------------------------------------------------------------------
@@ -191,7 +258,6 @@ def main(args):
     # --------------------------------------------------------------------------
     # MODEL
     logger.info('-' * 100)
-    start_epoch = 0
     if args.checkpoint:
         raise NotImplementedError
     else:
@@ -203,13 +269,11 @@ def main(args):
         p.requires_grad = False
     parameters = [p for p in model.parameters() if p.requires_grad]
 
-    model_summary, total_params, total_wo_emb = utils.torch_summarize(model)
+    model_summary = utils.torch_summarize(model)
     if args.print_parameters:
-         print(model_summary)
+         logger.info(model_summary)
 
     optimizer = torch.optim.Adamax(parameters, weight_decay=args.weight_decay)
-
-    # todo. using multiple GPUs?
 
     # --------------------------------------------------------------------------
     # DATA ITERATORS
@@ -246,72 +310,16 @@ def main(args):
         'ratio': [],
         'losses': []
     }
-    for epoch in range(start_epoch, args.num_epochs):
 
-        # train update sequence
-        model.train()
-        losses = [[], 0]
-        losses_total = 0
-        for idx, ex in enumerate(train_loader):
-            if args.cuda:
-                inputs = [e if e is None else Variable(e.cuda())
-                          for e in ex[:2]]
-            else:
-                inputs = [e if e is None else Variable(e) for e in ex[:2]]
-            if args.model_type == 'cnn':
-                logit = model(*inputs)
-            else:
-                logit = model(*inputs, model.initHidden(inputs[0].size()[0]))
-            loss = F.cross_entropy(logit, Variable(ex[2]))
-
-            # Clear gradients and run backward
-            optimizer.zero_grad()
-            loss.backward()
-
-            # Clip gradients
-            # todo. check if this works
-            # torch.nn.utils.clip_grad_norm(model.parameters(),
-            #                               args.grad_clipping)
-
-            # Update parameters
-            optimizer.step()
-
-            losses[0].append(loss.data[0])
-            losses[1] += 1
-            losses_total += loss.data[0]
-
-            if idx % 10 == 0:
-                logger.info('train: Epoch = {} | iter = {}/{} | loss = {:.2E}'
-                            ''.format(epoch, idx, len(train_loader),
-                                      sum(losses[0])/losses[1]))
-                losses = [[], 0]
-        stats['losses'].append(round(losses_total / len(train_loader), 4))
-        logger.info('train: Epoch {} done.'.format(epoch))
-
-        # Validate
-        valid_tr = validate(train_loader, model, stats, mode='train')
-        stats['acc_train'].append(round(valid_tr, 4))
-        valid_ts = validate(test_loader, model, stats, mode='test')
-        stats['acc_test'].append(round(valid_ts, 4))
-        ratio = valid_ts / (total_wo_emb * (epoch + 1))**.1
-        stats['ratio'].append(ratio)
-        if valid_ts > stats['best_valid']:
-            logger.info('BEST VALID: accuracy={:.2f} (epoch {})'
-                        ''.format(valid_ts, epoch))
-            # todo. save the best model
-            stats['best_valid'] = valid_ts
-            stats['best_valid_at'] = epoch
-        if ratio > stats['best_ratio']:
-            logger.info('BEST RATIO: ratio={:.2f} (epoch {})'
-                        ''.format(ratio, epoch))
-            stats['best_ratio'] = ratio
-            stats['best_ratio_at'] = epoch
-
-        print(stats)
-
+    # train/validate loop
+    try:
+        train(model, train_loader, test_loader, optimizer, stats)
+    except KeyboardInterrupt:
+        logger.info(stats)
+        if args.save_plots:
+            save_plots(stats)
+        exit(1)
     logger.info(stats)
-
-    # save plot files
     if args.save_plots:
         save_plots(stats)
 
@@ -380,4 +388,5 @@ if __name__ == '__main__':
             torch.cuda.manual_seed(args.random_seed)
 
     # Run!
+    logger.info('COMMAND: %s' % ' '.join(sys.argv))
     main(args)

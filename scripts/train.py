@@ -216,12 +216,12 @@ def validate(data_loader, model, stats, mode):
 
 
 def save_plots(stats):
-    import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
-    x = list(range(args.num_epochs))
-    # losses
-    plt.figure(figsize=(7, 4))
-    plt.subplot(121)
+x = list(range(args.num_epochs))
+# losses
+plt.figure(figsize=(7, 4))
+plt.subplot(121)
 plt.plot(x, stats['losses'], 'r', label='train loss')
 plt.xlabel('epoch')
 plt.ylabel('loss')

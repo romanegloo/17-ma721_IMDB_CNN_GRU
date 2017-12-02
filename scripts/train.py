@@ -244,17 +244,17 @@ import matplotlib.pyplot as plt
 
 x = list(range(args['num_epochs']))
 # losses
-plt.figure(figsize=(9, 4))
-cnn = plt.subplot(121)
-plt.plot(x, stats['losses'], 'r', label='train loss')
-plt.xlabel('epoch')
-plt.ylabel('loss')
-plt.title('Train Losses')
-plt.legend()
+fig = plt.figure(figsize=(9, 4))
+cnn = fig.add_subplot(121)
+cnn.plot(x, stats['losses'], 'r', label='train loss')
+cnn.set_xlabel('epoch')
+cnn.set_ylabel('loss')
+cnn.set_title('Train Losses')
+cnn.legend()
 
 
 # accuracy
-rnn = plt.subplot(122)
+rnn = fig.add_subplot(122)
 rnn.plot(x, stats['acc_train'], 'g', label='train')
 rnn.plot(x, stats['acc_test'], 'r', label='test')
 rnn.set_ylim(ymax=1)

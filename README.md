@@ -102,7 +102,7 @@ Parameters are listed as below:
 
 Total number of parameters (excluding the embedding layer): 165,378
 
-## Additional Works (and future works)
+## Additional Work (and future work)
 The model is trained in word-based tokens. Each token can be further characterized by additional attributes, such as annotation tags including POS (part of speech) and NER (named entity recognition). Providing additional features like these NLP tags will increase the efficiency of conveying the semantics of the constituent words. 
 I have preprocessed the dataset with [spaCy](https://spacy.io/) tokenizer by which each token has been associated with the known POS and NER tags.
 
@@ -117,15 +117,13 @@ Considering the dimensions of word embeddings (mostly 300), adding these two fea
 
 | <sub>network | <sub>capacity (#parameters) | <sub>batch\_size | <sub>optimizer | <sub>regularization | <sub>accuracy (vl/ts) | <sub>best ratio (acc. to computation) | <sub>best accuracy (vl/ts) |
 |:--------:|:---------------------------------:|:----------:|:--------:|:--------------:|:--------:|:--------------------:|:-------------:|
-| <sub>CNN | <sub>461,786 | <sub>10 | <sub>Adamax (lr=2e-3) | <sub>L2 (decay=0) | <sub>0.867 / 0.889 | <sub>0.224 (1 epoch) | <sub>1.000 / 0.999 (48 epochs) |
-| <sub>GRU | <sub>165,378 | <sub>10 | <sub>Adamax (lr=2e-3) | <sub>L2 (decay=0) | <sub>0.779 / 0.933 | <sub>0.26 (1 epoch) | <sub>1.000 / 0.999 (48 epochs) |
+| <sub>CNN | <sub>461,786 | <sub>10 | <sub>Adamax (lr=2e-3) | <sub>L2 (decay=0) | <sub>0.867 / 0.889 | <sub>0.224 (2 epoch) | <sub>1.000 / 0.999 (48 epochs) |
+| <sub>GRU | <sub>70,402 | <sub>10 | <sub>Adamax (lr=2e-3) | <sub>L2 (decay=0) | <sub>0.811 / 0.873 | <sub>0.286 (1 epoch) | <sub>0.999 / 0.999 (26 epochs) |
 
 ![Loss/Accuracy Plot of CNN model](https://github.com/romanegloo/17-ma721_IMDB_CNN_GRU/blob/master/log/plot-cnn-1330.png?raw=true)  
 *Figure. Loss/Accuracy Plots of CNN model*
 
 ![Loss/Accuracy Plot of RNN model](https://github.com/romanegloo/17-ma721_IMDB_CNN_GRU/blob/master/log/plot-rnn-021324.png?raw=true)  
 *Figure. Loss/Accuracy Plots of RNN model*
-
-## Conclusion
 
 

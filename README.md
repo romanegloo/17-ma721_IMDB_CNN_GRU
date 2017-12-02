@@ -123,7 +123,7 @@ Considering the dimensions of word embeddings (mostly 300), adding these two fea
 ![Loss/Accuracy Plot of CNN model](https://github.com/romanegloo/17-ma721_IMDB_CNN_GRU/blob/master/log/plot-cnn-1330.png?raw=true)  
 *Figure. Loss/Accuracy Plots of CNN model*
 
-![Loss/Accuracy Plot of RNN model](https://github.com/romanegloo/17-ma721_IMDB_CNN_GRU/blob/master/log/plot-rnn-021324.png?raw=true)
+![Loss/Accuracy Plot of RNN model](https://github.com/romanegloo/17-ma721_IMDB_CNN_GRU/blob/master/log/plot-rnn-021324.png?raw=true)  
 *Figure. Loss/Accuracy Plots of RNN model*
 
 ## Conclusion

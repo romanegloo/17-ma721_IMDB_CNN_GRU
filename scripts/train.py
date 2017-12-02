@@ -218,10 +218,34 @@ def validate(data_loader, model, stats, mode):
 def save_plots(stats):
 import matplotlib.pyplot as plt
 
-x = list(range(args.num_epochs))
+# x = list(range(args.num_epochs))
+# # losses
+# plt.figure(figsize=(14, 8))
+# plt.subplot(121)
+# plt.plot(x, stats['losses'], 'r', label='train loss')
+# plt.xlabel('epoch')
+# plt.ylabel('loss')
+# plt.title('Train Losses')
+# plt.legend()
+#
+#
+# # accuracy
+# plt.subplot(122)
+# plt.plot(x, stats['acc_train'], 'g', label='train')
+# plt.plot(x, stats['acc_test'], 'r', label='test')
+# plt.xlabel('epoch')
+# plt.ylabel('accuracy')
+# plt.title('Test/Train Accuracies')
+# plt.legend()
+#
+# plt.tight_layout()
+# plt.show()
+# plt.savefig("plot-{}.png".format(args.run_name))
+
+x = list(range(args['num_epochs']))
 # losses
-plt.figure(figsize=(7, 4))
-plt.subplot(121)
+plt.figure(figsize=(9, 4))
+cnn = plt.subplot(121)
 plt.plot(x, stats['losses'], 'r', label='train loss')
 plt.xlabel('epoch')
 plt.ylabel('loss')
@@ -230,17 +254,18 @@ plt.legend()
 
 
 # accuracy
-plt.subplot(122)
-plt.plot(x, stats['acc_train'], 'g', label='train')
-plt.plot(x, stats['acc_test'], 'r', label='test')
-plt.xlabel('epoch')
-plt.ylabel('accuracy')
-plt.title('Test/Train Accuracies')
-plt.legend()
+rnn = plt.subplot(122)
+rnn.plot(x, stats['acc_train'], 'g', label='train')
+rnn.plot(x, stats['acc_test'], 'r', label='test')
+rnn.set_ylim(ymax=1)
+rnn.set_xlabel('epoch')
+rnn.set_ylabel('accuracy')
+rnn.set_title('Test/Train Accuracies')
+rnn.legend(loc=4)
 
 plt.tight_layout()
-plt.savefig("plot-{}.png".format(args.run_name))
 plt.show()
+plt.savefig("plot-{}.png".format(args['run_name']))
 
 
 # ------------------------------------------------------------------------------

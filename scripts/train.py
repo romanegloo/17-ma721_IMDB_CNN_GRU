@@ -264,8 +264,8 @@ rnn.set_title('Test/Train Accuracies')
 rnn.legend(loc=4)
 
 plt.tight_layout()
-plt.show()
 plt.savefig("plot-{}.png".format(args['run_name']))
+plt.show()
 
 
 # ------------------------------------------------------------------------------

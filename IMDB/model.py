@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 # ------------------------------------------------------------------------------
 
 class CnnImdbSA(nn.Module):
-    def __init__(self, args, word_dict):
+    def __init__(self, args, word_dict, state_dict=None):
         super(CnnImdbSA, self).__init__()
         self.args = args
         self.num_parameters = 0
@@ -33,6 +33,10 @@ class CnnImdbSA(nn.Module):
             [nn.Conv2d(Ci, Co, (K, E)) for K in Ks])
         self.dropout = nn.Dropout(args.dropout)
         self.decoder = nn.Linear(len(Ks) * Co, C)
+
+        # Load saved state
+        if state_dict:
+            self.load_state_dict(state_dict)
 
     def forward(self, x, x_len):
         if self.args.cuda:
@@ -95,8 +99,9 @@ class CnnImdbSA(nn.Module):
                     (len(vec_counts), 100 * len(vec_counts) / len(words)))
 
 
+
 class CnnFeatImdbSA(nn.Module):
-    def __init__(self, args, word_dict, feature_dict):
+    def __init__(self, args, word_dict, feature_dict, state_dict=None):
         super(CnnFeatImdbSA, self).__init__()
         self.args = args
         self.num_parameters = 0
@@ -117,6 +122,10 @@ class CnnFeatImdbSA(nn.Module):
             [nn.Conv2d(Ci, Co, (K, E)) for K in Ks])
         self.dropout = nn.Dropout(args.dropout)
         self.decoder = nn.Linear(len(Ks) * Co, C)
+
+        # Load saved state
+        if state_dict:
+            self.load_state_dict(state_dict)
 
     def forward(self, x, x_len, ner, pos):
         if self.args.cuda:

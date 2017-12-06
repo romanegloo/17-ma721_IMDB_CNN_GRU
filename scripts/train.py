@@ -7,6 +7,7 @@ import os
 import sys
 import time
 from pathlib import PosixPath
+import copy
 
 import numpy as np
 import torch
@@ -54,11 +55,6 @@ def add_train_args(parser):
     files.add_argument('--embedding-file', type=str,
                        help='path to Space-separated embeddings file')
 
-    # saving + loading (continue from pretrained model)
-    save_load = parser.add_argument_group('Files')
-    save_load.add_argument('--checkpoint', action='store_true',
-                           help='Save model + optimizer state after each epoch')
-
 
 def add_model_args(parser):
     # Model architecture
@@ -70,13 +66,13 @@ def add_model_args(parser):
                        help='add nlp annotations to the inputs')
     model.add_argument('--embedding-dim', type=int, default=300,
                        help='Embedding size if embedding_file is not given')
-    model.add_argument('--hidden-dim', type=int, default=128,
+    model.add_argument('--hidden-dim', type=int, default=64,
                        help='GRU hidden dimension')
-    model.add_argument('--doc-maxlen', type=int, default=500,
+    model.add_argument('--doc-maxlen', type=int, default=250,
                        help='Max length of document in words')
-    model.add_argument('--kernel-num', type=int, default=128,
+    model.add_argument('--kernel-num', type=int, default=32,
                        help='number of each kind of kernel')
-    model.add_argument('--kernel-sizes', type=str, default='3,4,5',
+    model.add_argument('--kernel-sizes', type=str, default='3,5',
                        help='Comma-separated kernel sizes used for CNN')
     model.add_argument('--dropout', type=float, default=0.5,
                        help='the probability for dropout')
@@ -179,9 +175,19 @@ def train(model, train_loader, test_loader, optimizer, global_stats):
         if valid_ts > global_stats['best_valid']:
             logger.info('BEST VALID: accuracy={:.2f} (epoch {})'
                         ''.format(valid_ts, epoch))
-            # todo. save the best model
             global_stats['best_valid'] = valid_ts
             global_stats['best_valid_at'] = epoch
+            # save the best model
+            params = {
+                'word_dict': model.word_dict,
+                'args': model.args,
+                'state_dict': copy.copy(model.state_dict())
+            }
+            try:
+                torch.save(params, args.model_file)
+            except BaseException:
+                logger.warning('WARN: Saving failed... continuing anyway.')
+
         if ratio > global_stats['best_ratio']:
             logger.info('BEST RATIO: ratio={:.2f} (epoch {})'
                         ''.format(ratio, epoch))
@@ -198,8 +204,6 @@ def validate(data_loader, model, stats, mode):
     accuracies = []
     for ex in data_loader:
         batch_size = ex[0].size(0)
-        # if mode == 'test':
-        #     print(model.args.doc_maxlen, ex)
         predict = model.predict(ex)
         accuracy = ex[2].eq(predict.data).sum() / batch_size
         examples += batch_size
@@ -216,56 +220,32 @@ def validate(data_loader, model, stats, mode):
 
 
 def save_plots(stats):
-import matplotlib.pyplot as plt
+    import matplotlib.pyplot as plt
 
-# x = list(range(args.num_epochs))
-# # losses
-# plt.figure(figsize=(14, 8))
-# plt.subplot(121)
-# plt.plot(x, stats['losses'], 'r', label='train loss')
-# plt.xlabel('epoch')
-# plt.ylabel('loss')
-# plt.title('Train Losses')
-# plt.legend()
-#
-#
-# # accuracy
-# plt.subplot(122)
-# plt.plot(x, stats['acc_train'], 'g', label='train')
-# plt.plot(x, stats['acc_test'], 'r', label='test')
-# plt.xlabel('epoch')
-# plt.ylabel('accuracy')
-# plt.title('Test/Train Accuracies')
-# plt.legend()
-#
-# plt.tight_layout()
-# plt.show()
-# plt.savefig("plot-{}.png".format(args.run_name))
-
-x = list(range(args['num_epochs']))
-# losses
-fig = plt.figure(figsize=(9, 4))
-cnn = fig.add_subplot(121)
-cnn.plot(x, stats['losses'], 'r', label='train loss')
-cnn.set_xlabel('epoch')
-cnn.set_ylabel('loss')
-cnn.set_title('Train Losses')
-cnn.legend()
+    x = list(range(args.num_epochs))
+    # losses
+    fig = plt.figure(figsize=(9, 4))
+    cnn = fig.add_subplot(121)
+    cnn.plot(x, stats['losses'], 'r', label='train loss')
+    cnn.set_xlabel('epoch')
+    cnn.set_ylabel('loss')
+    cnn.set_title('Train Losses')
+    cnn.legend()
 
 
-# accuracy
-rnn = fig.add_subplot(122)
-rnn.plot(x, stats['acc_train'], 'g', label='train')
-rnn.plot(x, stats['acc_test'], 'r', label='test')
-rnn.set_ylim(ymax=1)
-rnn.set_xlabel('epoch')
-rnn.set_ylabel('accuracy')
-rnn.set_title('Test/Train Accuracies')
-rnn.legend(loc=4)
+    # accuracy
+    rnn = fig.add_subplot(122)
+    rnn.plot(x, stats['acc_train'], 'g', label='train')
+    rnn.plot(x, stats['acc_test'], 'r', label='test')
+    rnn.set_ylim(ymax=1)
+    rnn.set_xlabel('epoch')
+    rnn.set_ylabel('accuracy')
+    rnn.set_title('Test/Train Accuracies')
+    rnn.legend(loc=4)
 
-plt.tight_layout()
-plt.savefig("plot-{}.png".format(args['run_name']))
-plt.show()
+    plt.tight_layout()
+    plt.savefig("plot-{}.png".format(args.run_name))
+    # plt.show()
 
 
 # ------------------------------------------------------------------------------
@@ -283,11 +263,8 @@ def main(args):
     # --------------------------------------------------------------------------
     # MODEL
     logger.info('-' * 100)
-    if args.checkpoint:
-        raise NotImplementedError
-    else:
-        logger.info('Initializing a new model')
-        model = init_model(args, train_exs, test_exs)
+    logger.info('Initializing a new model')
+    model = init_model(args, train_exs, test_exs)
 
     # fix embeddings
     for p in model.encoder.parameters():
@@ -388,6 +365,8 @@ if __name__ == '__main__':
     if args.run_name is None:
         args.run_name = str(int(time.time()))
     logger.info('RUN: {}'.format(args.run_name))
+    # path where to save model file
+    args.model_file = "{}-best.mdl".format(args.run_name)
 
     # add file log handle
     file = logging.FileHandler("run{}.log".format(args.run_name))

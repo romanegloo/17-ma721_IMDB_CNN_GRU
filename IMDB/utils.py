@@ -1,27 +1,25 @@
 #!/usr/bin/env python3
-"""Utilities for loading data and evaluating/reporting"""
-import json
+"""Helper tools"""
+import time
 import logging
-import numpy as np
-import torch.nn as nn
-from torch.nn.modules.module import _addindent
+import json
 
 from .data import Dictionary
 
 logger = logging.getLogger(__name__)
 
 
-def load_data(args, filename):
+def load_data(filename):
     """Load examples from preprocessed file.
     One example per line, JSON encoded.
     """
     # Load JSON lines
-    with open(args.train_file) as f:
+    with open(filename) as f:
         examples = [json.loads(line) for line in f]
     return examples
 
 
-def build_feature_dict(args, examples):
+def build_feature_dict(examples):
     """Index features (one hot) from fields in examples and options."""
     def _insert(feature):
         if feature not in feature_dict:
@@ -41,16 +39,16 @@ def build_feature_dict(args, examples):
     return feature_dict
 
 
-def build_word_dict(args, examples):
+def build_word_dict(examples):
     """Return a dictionary from provided examples.
     """
     word_dict = Dictionary()
-    for w in load_words(args, examples):
+    for w in load_words(examples):
         word_dict.add(w)
     return word_dict
 
 
-def load_words(args, examples):
+def load_words(examples):
     """Iterate and index all the words in examples (documents + questions)."""
     def _insert(iterable):
         for w in iterable:
@@ -63,44 +61,52 @@ def load_words(args, examples):
     return words
 
 
+class AverageMeter(object):
+    """Computes and stores the average and current value."""
 
-# ------------------------------------------------------------------------------
-# Utils
-# - torch_summarize: displays the summary note with weights and parameters of
-#  the network (obtained from http://bit.ly/2glYWVV)
-# ------------------------------------------------------------------------------
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
 
 
-def torch_summarize(model, show_weights=True, show_parameters=True):
-    """Summarizes torch model by showing trainable parameters and weights."""
-    tmpstr = model.__class__.__name__ + ' (\n'
-    total_params = 0
-    total_params_wo_embedding = 0
-    for key, module in model._modules.items():
-        # if it contains layers let call it recursively to get params and weights
-        if type(module) in [
-            nn.modules.container.Container,
-            nn.modules.container.Sequential
-        ]:
-            modstr = torch_summarize(module)
-        else:
-            modstr = module.__repr__()
-        modstr = _addindent(modstr, 2)
+class Timer(object):
+    """Computes elapsed time."""
 
-        params = sum([np.prod(p.size()) for p in module.parameters()])
-        total_params += params
-        if key != 'encoder':
-            total_params_wo_embedding += params
-        weights = tuple([tuple(p.size()) for p in module.parameters()])
+    def __init__(self):
+        self.running = True
+        self.total = 0
+        self.start = time.time()
 
-        tmpstr += '  (' + key + '): ' + modstr
-        if show_weights:
-            tmpstr += ', weights={}'.format(weights)
-        if show_parameters:
-            tmpstr += ', parameters={}'.format(params)
-        tmpstr += '\n'
+    def reset(self):
+        self.running = True
+        self.total = 0
+        self.start = time.time()
+        return self
 
-    tmpstr += ')\ntotal_params: %d, total_params_wo_embedding: %d' %\
-              (total_params, total_params_wo_embedding)
-    model.num_parameters = total_params_wo_embedding
-    return tmpstr
+    def resume(self):
+        if not self.running:
+            self.running = True
+            self.start = time.time()
+        return self
+
+    def stop(self):
+        if self.running:
+            self.running = False
+            self.total += time.time() - self.start
+        return self
+
+    def time(self):
+        if self.running:
+            return self.total + time.time() - self.start
+        return self.total

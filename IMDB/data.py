@@ -72,13 +72,13 @@ class Dictionary(object):
 
 
 class ImdbDataset(Dataset):
-    def __init__(self, examples, model):
+    def __init__(self, args, examples, word_dict, feature_dict):
         self.ex = examples
-        self.w_dict = model.word_dict
-        self.doc_maxlen = model.args.doc_maxlen
+        self.w_dict = word_dict
+        self.doc_maxlen = args.doc_maxlen
         self.lengths = [0] * len(examples)
-        self.use_ft = model.args.use_feature_tags
-        self.ft_dict = model.feature_dict if self.use_ft else None
+        self.use_ft = args.use_feature_tags
+        self.ft_dict = feature_dict if self.use_ft else None
 
         self._get_doc_lengths()
 

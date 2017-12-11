@@ -1,2 +1,1 @@
-from .model import CnnImdbSA, CnnFeatImdbSA, GruImdbSA
-from . import utils
+from .model import ImdbSA

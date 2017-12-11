@@ -178,13 +178,13 @@ predicted label: negative
 
 | <sub>network | <sub>capacity (#parameters) | <sub>batch\_size | <sub>optimizer | <sub>regularization | <sub>accuracy (vl/ts) | <sub>best ratio (acc. to computation) | <sub>best accuracy (vl/ts) |
 |:--------:|:---------------------------------:|:----------:|:--------:|:--------------:|:--------:|:--------------------:|:-------------:|
-| <sub>CNN | <sub>76,994 | <sub>10 | <sub>Adamax (lr=2e-3) | <sub>L2 (decay=0) | <sub>0.778 / 0.856 | <sub>0.278 (1 epoch) | <sub>1.000 / 0.999 (48 epochs) |
-| <sub>GRU | <sub>70,402 | <sub>10 | <sub>Adamax (lr=2e-3) | <sub>L2 (decay=0) | <sub>0.811 / 0.873 | <sub>0.286 (1 epoch) | <sub>0.999 / 0.999 (26 epochs) |
+| <sub>CNN | <sub>76,994 | <sub>10 | <sub>Adamax (lr=2e-3) | <sub>L2 (decay=0) | <sub>0.778 / 0.856 | <sub>0.278 (1 epoch) | <sub>0.981 / 0.875 (26 epochs) |
+| <sub>GRU | <sub>70,402 | <sub>10 | <sub>Adamax (lr=2e-3) | <sub>L2 (decay=0) | <sub>0.811 / 0.873 | <sub>0.286 (1 epoch) | <sub>0.926 / 0.891 (23 epochs) |
 
-![Loss/Accuracy Plot of CNN model](https://github.com/romanegloo/17-ma721_IMDB_CNN_GRU/blob/master/log/plot-cnn-1330.png?raw=true)  
+![Loss/Accuracy Plot of CNN model](https://github.com/romanegloo/17-ma721_IMDB_CNN_GRU/blob/master/log/plot-cnn.png?raw=true)  
 *Figure. Loss/Accuracy Plots of CNN model*
 
-![Loss/Accuracy Plot of RNN model](https://github.com/romanegloo/17-ma721_IMDB_CNN_GRU/blob/master/log/plot-rnn-021324.png?raw=true)  
+![Loss/Accuracy Plot of RNN model](https://github.com/romanegloo/17-ma721_IMDB_CNN_GRU/blob/master/log/plot-rnn.png?raw=true)  
 *Figure. Loss/Accuracy Plots of RNN model*
 
 
